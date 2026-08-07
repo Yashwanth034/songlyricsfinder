@@ -280,9 +280,10 @@ button:disabled { cursor: not-allowed; opacity: .42; }
 }
 .lyric-line.active {
   color: #ffffff;
-  background: rgba(139, 92, 246, 0.15);
+  background: rgba(139, 92, 246, 0.18);
   border-left-color: var(--accent);
   border-radius: 4px;
+  font-weight: 600;
 }
 
 /* --- SCROLLBAR --- */

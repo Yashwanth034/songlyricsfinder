@@ -213,6 +213,11 @@
   function lyricText(item) {
     return item?.plainLyrics || item?.syncedLyrics?.replace(/\[\d{1,2}:\d{2}(?:\.\d{1,3})?\]/g, "").trim() || null;
   }
+  function lyricResult(item) {
+    if (!item) return null;
+    const lyrics = lyricText(item);
+    return lyrics ? { lyrics, synced: item.syncedLyrics || null } : null;
+  }
   function scoreCandidate(candidate, wanted) {
     const candidateTrack = normalise(candidate.trackName || candidate.title || "");
     const wantedTrack = normalise(wanted.track);
@@ -238,14 +243,14 @@
     if (!Array.isArray(results)) return null;
     const ranked = results.map((item) => ({ item, score: scoreCandidate(item, wanted) })).sort((a, b) => b.score - a.score);
     const match = ranked.find(({ item, score }) => score >= 0.6 && lyricText(item)?.length > 10);
-    return match ? lyricText(match.item) : null;
+    return match ? lyricResult(match.item) : null;
   }
   async function fetchDirectFromLRCLIB(artist, track) {
     if (!track || artist === "Unknown Artist") return null;
     const data = await fetchJson(`https://lrclib.net/api/get?artist_name=${encodeURIComponent(artist)}&track_name=${encodeURIComponent(track)}`, {
       headers: { "Lrclib-Client": "Instant Sidebar Lyrics/3.2 (Chrome Extension)" }
     });
-    return lyricText(data);
+    return lyricResult(data);
   }
   async function fetchFromLyricsOvh(artist, track) {
     if (!track) return null;
@@ -729,9 +734,9 @@
       const retries = i === 0 ? 3 : 1;
       for (let attempt = 1; attempt <= retries; attempt++) {
         const direct = await fetchDirectFromLRCLIB(candidate.artist, candidate.track);
-        if (direct?.length > 10) return { lyrics: direct, source: "LRCLIB" };
+        if (direct?.lyrics?.length > 10) return { ...direct, source: "LRCLIB" };
         const lyrics = await fetchFromLRCLIB(candidate.track, candidate);
-        if (lyrics?.length > 10) return { lyrics, source: "LRCLIB" };
+        if (lyrics?.lyrics?.length > 10) return { ...lyrics, source: "LRCLIB" };
         if (attempt < retries) await delay(1500);
       }
     }
@@ -800,9 +805,9 @@
         if (scoreCandidate({ artistName: artist, trackName: track }, info) < 0.6) continue;
         const canonicalInfo = { artist, track, context: "" };
         let lyrics = await fetchDirectFromLRCLIB(artist, track);
-        if (lyrics?.length > 10) return { lyrics, source: "catalog-assisted LRCLIB" };
+        if (lyrics?.lyrics?.length > 10) return { lyrics: lyrics.lyrics, synced: lyrics.synced, source: "catalog-assisted LRCLIB" };
         lyrics = await fetchFromLRCLIB(`${artist} ${track}`, canonicalInfo);
-        if (lyrics?.length > 10) return { lyrics, source: "catalog-assisted LRCLIB" };
+        if (lyrics?.lyrics?.length > 10) return { lyrics: lyrics.lyrics, synced: lyrics.synced, source: "catalog-assisted LRCLIB" };
         lyrics = await fetchFromLyricsOvh(artist, track);
         if (lyrics?.length > 10) return { lyrics, source: "catalog match" };
       }
@@ -812,11 +817,89 @@
   function setLyricsText(text) {
     $("lyrics-text").textContent = text || "";
   }
-  function updateUI({ title = "", lyrics = "", status = "", failed = false, saved = false, alreadySubmitted = false }) {
+  var syncedLines = null;
+  var activeLineIndex = -1;
+  var syncedPollTimer = null;
+  function parseSyncedLyrics(text) {
+    if (!text) return null;
+    const lines = [];
+    const stampRe = /\[(?:(?:(\d{1,2}):)?(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?)\]/g;
+    for (const raw of text.split("\n")) {
+      const content = raw.replace(stampRe, "").trim();
+      if (!content) continue;
+      const matches = raw.matchAll(stampRe);
+      let matched = false;
+      for (const m of matches) {
+        matched = true;
+        const hours = m[1] ? parseInt(m[1], 10) : 0;
+        const minutes = parseInt(m[2], 10);
+        const seconds = parseInt(m[3], 10);
+        const fraction = m[4] ? parseInt(m[4].padEnd(3, "0"), 10) / 1e3 : 0;
+        lines.push({ time: hours * 3600 + minutes * 60 + seconds + fraction, text: content });
+      }
+      if (!matched) continue;
+    }
+    if (!lines.length) return null;
+    lines.sort((a, b) => a.time - b.time);
+    return lines;
+  }
+  function renderLyrics(lyrics, synced, failed) {
+    const parsed = synced ? parseSyncedLyrics(synced) : null;
+    if (parsed?.length) {
+      syncedLines = parsed;
+      activeLineIndex = -1;
+      const container = $("lyrics-text");
+      container.textContent = "";
+      const frag = document.createDocumentFragment();
+      for (const line of parsed) {
+        const div = document.createElement("div");
+        div.className = "lyric-line";
+        div.textContent = line.text;
+        frag.appendChild(div);
+      }
+      container.appendChild(frag);
+      startSyncedTimingPoll();
+    } else {
+      syncedLines = null;
+      activeLineIndex = -1;
+      stopSyncedTimingPoll();
+      setLyricsText(lyrics || (failed ? "No lyrics found. You can paste the correct lyrics below." : ""));
+    }
+  }
+  function startSyncedTimingPoll() {
+    stopSyncedTimingPoll();
+    syncedPollTimer = setInterval(async () => {
+      if (!syncedLines?.length || !currentTabId) return;
+      const state = await queryVideoState(currentTabId) || await queryVideoStateViaMessage(currentTabId);
+      if (state) updateActiveLine(state.currentTime);
+    }, 500);
+  }
+  function stopSyncedTimingPoll() {
+    if (syncedPollTimer) {
+      clearInterval(syncedPollTimer);
+      syncedPollTimer = null;
+    }
+  }
+  function updateActiveLine(currentTime) {
+    if (!syncedLines?.length) return;
+    let index = -1;
+    for (let i = 0; i < syncedLines.length; i++) {
+      if (syncedLines[i].time <= currentTime) index = i;
+      else break;
+    }
+    if (index === activeLineIndex) return;
+    activeLineIndex = index;
+    const lines = $("lyrics-text").querySelectorAll(".lyric-line");
+    for (let i = 0; i < lines.length; i++) lines[i].classList.toggle("active", i === index);
+    if (index >= 0 && autoScrollEnabled && !userScrolling && Date.now() - autoScrollStartTime >= AUTO_SCROLL_DELAY) {
+      lines[index]?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }
+  function updateUI({ title = "", lyrics = "", status = "", failed = false, saved = false, alreadySubmitted = false, synced = null }) {
     $("song-title").textContent = title || "\u{1F3B5} Please play a song on YouTube";
     $("status").textContent = status + (saved ? " (Saved)" : "");
     $("status").style.color = failed ? "#ff6b6b" : status.includes("Searching") ? "#ffa500" : status ? "#4caf50" : "#999";
-    setLyricsText(lyrics || (failed ? "No lyrics found. You can paste the correct lyrics below." : ""));
+    renderLyrics(lyrics, synced, failed);
     $("copy-button").disabled = !lyrics;
     $("search-button").hidden = !failed;
     const hasQuery = Boolean(currentSearchQuery);
@@ -861,7 +944,7 @@
     const wrapper = document.getElementById("lyrics-wrapper");
     if (lyrics) wrapper.scrollTop = 0;
     if (lyrics && lyrics.length > 0 || saved || status && (status.includes("found") || status.includes("loaded from your saved collection"))) {
-      lastState = { title, lyrics, status, failed, saved, alreadySubmitted };
+      lastState = { title, lyrics, status, failed, saved, alreadySubmitted, synced };
     }
   }
   async function queryVideoState(tabId) {
@@ -910,6 +993,7 @@
   }
   function handleAutoScroll(currentTime, duration) {
     if (!autoScrollEnabled || userScrolling) return;
+    if (syncedLines?.length) return;
     if (!duration || !isFinite(duration) || duration <= 0) return;
     const elapsed = Date.now() - autoScrollStartTime;
     if (elapsed < AUTO_SCROLL_DELAY) return;
@@ -1140,7 +1224,8 @@
       updateUI({
         title: displayName,
         lyrics: result.lyrics,
-        status: `Lyrics found (${result.source})`,
+        synced: result.synced,
+        status: `Lyrics found (${result.source})${result.synced ? " \xB7 synced" : ""}`,
         saved: false
       });
     } else {
@@ -1285,13 +1370,14 @@
           if (found) break;
         }
       }
-      if (found?.length > 10) {
+      if (found?.lyrics?.length > 10) {
         await deleteLyrics(videoId);
         manualLock = false;
         activeVideoKey = "";
         updateUI({
           title: info.track || info.fullTitle,
-          lyrics: found,
+          lyrics: found.lyrics,
+          synced: found.synced,
           status: "Lyrics found (LRCLIB) \u2014 now live for everyone",
           saved: false
         });
