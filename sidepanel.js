@@ -827,7 +827,22 @@ function startSyncedTimingPoll() {
     if (!syncedLines?.length || !currentTabId) return;
     const state = (await queryVideoState(currentTabId)) || (await queryVideoStateViaMessage(currentTabId));
     if (state) updateActiveLine(state.currentTime);
+    else await checkFollowedTabAlive(); // followed tab may have been closed
   }, 500);
+}
+
+// If the followed tab (possibly a background tab) was closed, re-detect so
+// the panel picks up another song or shows the idle message instead of
+// freezing on stale lyrics.
+let lastTabGoneCheck = 0;
+async function checkFollowedTabAlive() {
+  if (!currentTabId || Date.now() - lastTabGoneCheck < 1000) return;
+  lastTabGoneCheck = Date.now();
+  try {
+    await chrome.tabs.get(currentTabId);
+  } catch {
+    detectAndDisplayLyrics();
+  }
 }
 
 function stopSyncedTimingPoll() {
@@ -986,6 +1001,8 @@ function startAutoScrollPolling() {
     const state = (await queryVideoState(currentTabId)) || (await queryVideoStateViaMessage(currentTabId));
     if (state && !state.paused) {
       handleAutoScroll(state.currentTime, state.duration);
+    } else if (!state) {
+      await checkFollowedTabAlive();
     }
   }, 1000);
 }
@@ -1189,12 +1206,44 @@ function getEffectiveInfo(rawTitle, videoId) {
 
 async function detectAndDisplayLyrics() {
   const run = ++requestNumber;
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab?.url?.includes('youtube.com/watch')) {
+  const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  let tab = activeTab?.url?.includes('youtube.com/watch') ? activeTab : null;
+  let fromBackground = false;
+
+  // If the active tab isn't a YouTube watch page, follow a song that keeps
+  // playing in a background tab of this window: prefer the most recently
+  // reported tab that's actually playing; fall back to a paused-but-loaded
+  // one so pausing doesn't blank the panel.
+  if (!tab) {
+    const windowTabs = await chrome.tabs.query({ currentWindow: true });
+    const windowTabIds = new Set(windowTabs.map((t) => t.id));
+    const all = await chrome.storage.session.get(null);
+    const candidates = Object.entries(all)
+      .filter(([key]) => key.startsWith('ytTab:'))
+      .map(([key, value]) => ({ tabId: Number(key.slice('ytTab:'.length)), ...value }))
+      .filter((c) => windowTabIds.has(c.tabId))
+      .sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0));
+    let fallback = null;
+    for (const candidate of candidates) {
+      if (candidate.tabId === activeTab?.id) continue;
+      const state = await queryVideoState(candidate.tabId);
+      if (!state || state.currentTime < 1) continue; // dead tab or nothing loaded
+      if (!state.paused) { tab = candidate; break; }
+      fallback = fallback || candidate;
+    }
+    if (!tab) tab = fallback;
+    if (tab) {
+      fromBackground = true;
+      // Present a tab-like object so the rest of the pipeline works unchanged.
+      tab = { id: tab.tabId, url: `https://www.youtube.com/watch?v=${tab.videoId}`, title: tab.title || '' };
+    }
+  }
+  if (!tab) {
     if (manualLock) return;
     updateUI({ status: 'Open a YouTube video to see lyrics' });
     return;
   }
+  const bgPrefix = fromBackground ? '🎵 Another tab · ' : '';
   currentTabId = tab.id;
   const rawTitle = await currentYouTubeTitle(tab);
   if (!rawTitle) {
@@ -1238,7 +1287,7 @@ async function detectAndDisplayLyrics() {
     updateUI({
       title: info.track || info.fullTitle,
       lyrics: saved,
-      status: 'Lyrics loaded from your saved collection',
+      status: bgPrefix + 'Lyrics loaded from your saved collection',
       saved: true,
       alreadySubmitted
     });
@@ -1249,7 +1298,7 @@ async function detectAndDisplayLyrics() {
   const info = getEffectiveInfo(rawTitle, videoId);
   const displayName = info.track || info.fullTitle;
   currentSearchQuery = `${info.track} song lyric`.trim();
-  updateUI({ title: displayName, status: 'Searching reliable lyric sources…' });
+  updateUI({ title: displayName, status: bgPrefix + 'Searching reliable lyric sources…' });
 
   // ------------------- TIMEOUT WRAPPER -------------------
   let result = null;
@@ -1266,7 +1315,7 @@ async function detectAndDisplayLyrics() {
     updateUI({
       title: displayName,
       lyrics: '',
-      status: 'No lyrics found. Paste the correct lyrics below and click Save.',
+      status: bgPrefix + 'No lyrics found. Paste the correct lyrics below and click Save.',
       failed: true,
       saved: false
     });
@@ -1280,14 +1329,14 @@ async function detectAndDisplayLyrics() {
       title: displayName,
       lyrics: result.lyrics,
       synced: result.synced,
-      status: `Lyrics found (${result.source})${result.synced ? ' · synced' : ''}`,
+      status: bgPrefix + `Lyrics found (${result.source})${result.synced ? ' · synced' : ''}`,
       saved: false
     });
   } else {
     updateUI({
       title: displayName,
       lyrics: '',
-      status: 'No lyrics found. Paste the correct lyrics below and click Save.',
+      status: bgPrefix + 'No lyrics found. Paste the correct lyrics below and click Save.',
       failed: true,
       saved: false
     });

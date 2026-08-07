@@ -74,9 +74,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   lastVideoState[tabId] = { videoId, isSong: message.isSong, title: message.title };
   refreshSettingsCache();
   refreshSuppressionCache();
-  chrome.storage.session.set({ [`videoTitle:${tabId}:${videoId}`]: message.title }).then(async () => {
+  chrome.storage.session.set({
+    [`videoTitle:${tabId}:${videoId}`]: message.title,
+    // Registry of YouTube watch tabs, used by the panel to keep following a
+    // song that keeps playing in a background tab.
+    [`ytTab:${tabId}`]: { videoId, title: message.title, lastSeen: Date.now() }
+  }).then(async () => {
     chrome.runtime.sendMessage({ type: 'youtubeTitle', tabId, videoId }).catch(() => {});
     sendResponse({ ok: true });
   });
   return true;
+});
+
+// Drop the registry entry when its tab goes away so a closed tab can never be
+// picked as a "playing in background" candidate.
+chrome.tabs.onRemoved.addListener((tabId) => {
+  chrome.storage.session.remove(`ytTab:${tabId}`);
 });

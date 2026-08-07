@@ -872,7 +872,18 @@
       if (!syncedLines?.length || !currentTabId) return;
       const state = await queryVideoState(currentTabId) || await queryVideoStateViaMessage(currentTabId);
       if (state) updateActiveLine(state.currentTime);
+      else await checkFollowedTabAlive();
     }, 500);
+  }
+  var lastTabGoneCheck = 0;
+  async function checkFollowedTabAlive() {
+    if (!currentTabId || Date.now() - lastTabGoneCheck < 1e3) return;
+    lastTabGoneCheck = Date.now();
+    try {
+      await chrome.tabs.get(currentTabId);
+    } catch {
+      detectAndDisplayLyrics();
+    }
   }
   function stopSyncedTimingPoll() {
     if (syncedPollTimer) {
@@ -985,6 +996,8 @@
       const state = await queryVideoState(currentTabId) || await queryVideoStateViaMessage(currentTabId);
       if (state && !state.paused) {
         handleAutoScroll(state.currentTime, state.duration);
+      } else if (!state) {
+        await checkFollowedTabAlive();
       }
     }, 1e3);
   }
@@ -1147,12 +1160,37 @@
   }
   async function detectAndDisplayLyrics() {
     const run = ++requestNumber;
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.url?.includes("youtube.com/watch")) {
+    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    let tab = activeTab?.url?.includes("youtube.com/watch") ? activeTab : null;
+    let fromBackground = false;
+    if (!tab) {
+      const windowTabs = await chrome.tabs.query({ currentWindow: true });
+      const windowTabIds = new Set(windowTabs.map((t) => t.id));
+      const all = await chrome.storage.session.get(null);
+      const candidates = Object.entries(all).filter(([key]) => key.startsWith("ytTab:")).map(([key, value]) => ({ tabId: Number(key.slice("ytTab:".length)), ...value })).filter((c) => windowTabIds.has(c.tabId)).sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0));
+      let fallback = null;
+      for (const candidate of candidates) {
+        if (candidate.tabId === activeTab?.id) continue;
+        const state = await queryVideoState(candidate.tabId);
+        if (!state || state.currentTime < 1) continue;
+        if (!state.paused) {
+          tab = candidate;
+          break;
+        }
+        fallback = fallback || candidate;
+      }
+      if (!tab) tab = fallback;
+      if (tab) {
+        fromBackground = true;
+        tab = { id: tab.tabId, url: `https://www.youtube.com/watch?v=${tab.videoId}`, title: tab.title || "" };
+      }
+    }
+    if (!tab) {
       if (manualLock) return;
       updateUI({ status: "Open a YouTube video to see lyrics" });
       return;
     }
+    const bgPrefix = fromBackground ? "\u{1F3B5} Another tab \xB7 " : "";
     currentTabId = tab.id;
     const rawTitle = await currentYouTubeTitle(tab);
     if (!rawTitle) {
@@ -1192,7 +1230,7 @@
       updateUI({
         title: info2.track || info2.fullTitle,
         lyrics: saved,
-        status: "Lyrics loaded from your saved collection",
+        status: bgPrefix + "Lyrics loaded from your saved collection",
         saved: true,
         alreadySubmitted
       });
@@ -1202,7 +1240,7 @@
     const info = getEffectiveInfo(rawTitle, videoId);
     const displayName = info.track || info.fullTitle;
     currentSearchQuery = `${info.track} song lyric`.trim();
-    updateUI({ title: displayName, status: "Searching reliable lyric sources\u2026" });
+    updateUI({ title: displayName, status: bgPrefix + "Searching reliable lyric sources\u2026" });
     let result = null;
     try {
       result = await Promise.race([
@@ -1216,7 +1254,7 @@
       updateUI({
         title: displayName,
         lyrics: "",
-        status: "No lyrics found. Paste the correct lyrics below and click Save.",
+        status: bgPrefix + "No lyrics found. Paste the correct lyrics below and click Save.",
         failed: true,
         saved: false
       });
@@ -1228,14 +1266,14 @@
         title: displayName,
         lyrics: result.lyrics,
         synced: result.synced,
-        status: `Lyrics found (${result.source})${result.synced ? " \xB7 synced" : ""}`,
+        status: bgPrefix + `Lyrics found (${result.source})${result.synced ? " \xB7 synced" : ""}`,
         saved: false
       });
     } else {
       updateUI({
         title: displayName,
         lyrics: "",
-        status: "No lyrics found. Paste the correct lyrics below and click Save.",
+        status: bgPrefix + "No lyrics found. Paste the correct lyrics below and click Save.",
         failed: true,
         saved: false
       });
