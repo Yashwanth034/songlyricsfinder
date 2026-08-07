@@ -850,7 +850,10 @@ function updateActiveLine(currentTime) {
   if (index === activeLineIndex) return;
   activeLineIndex = index;
   const lines = $('lyrics-text').querySelectorAll('.lyric-line');
-  for (let i = 0; i < lines.length; i++) lines[i].classList.toggle('active', i === index);
+  for (let i = 0; i < lines.length; i++) {
+    lines[i].classList.toggle('active', i === index);
+    lines[i].classList.toggle('past', i < index);
+  }
   if (index >= 0 && autoScrollEnabled && !userScrolling && Date.now() - autoScrollStartTime >= AUTO_SCROLL_DELAY) {
     lines[index]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
