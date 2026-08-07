@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Lyrics Sidebar</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <main id="container">
+    <section id="header">
+      <div class="eyebrow"><span class="pulse-dot"></span> INSTANT LYRICS</div>
+      <div id="title-row">
+        <h2 id="song-title">Play a song on YouTube</h2>
+        <button id="refresh-btn" class="icon-btn" type="button" title="Re-detect current song" aria-label="Refresh lyrics"><span aria-hidden="true">↻</span></button>
+        <button id="edit-title-btn" class="icon-btn" type="button" title="Edit title" aria-label="Edit title"><span aria-hidden="true">✏️</span></button>
+      </div>
+      <div id="title-edit-row" style="display:none;">
+        <input id="title-edit-input" type="text" placeholder="Type the correct song title…" autocomplete="off">
+        <button id="title-search-btn" class="icon-btn icon-btn-accent" type="button" title="Search with this title" aria-label="Search with this title"><span aria-hidden="true">🔍</span></button>
+      </div>
+      <div id="status" aria-live="polite">Ready when you are</div>
+      <div class="controls" aria-label="Lyrics actions">
+        <button id="copy-button" class="secondary-action" type="button" disabled><span aria-hidden="true">⧉</span> Copy</button>
+        <button id="search-button" class="primary-action" type="button" hidden><span aria-hidden="true">⌕</span> Search web</button>
+      </div>
+      <div class="controls" aria-label="Other lyric sources" id="other-sources">
+        <button id="spotify-button" class="secondary-action" type="button" disabled><span aria-hidden="true">🎧</span> Spotify</button>
+        <button id="ytmusic-button" class="secondary-action" type="button" disabled><span aria-hidden="true">▶</span> YT Music</button>
+      </div>
+      <label class="auto-open"><input id="auto-open" type="checkbox"><span class="switch" aria-hidden="true"></span><span>Open automatically for songs</span></label>
+      <!-- NEW: Auto‑scroll toggle -->
+      <label class="auto-scroll"><input id="auto-scroll-toggle" type="checkbox"><span class="switch" aria-hidden="true"></span><span>Auto‑scroll lyrics</span></label>
+    </section>
+
+    <section id="lyrics-wrapper" aria-label="Lyrics"><div id="lyrics-text"></div></section>
+
+    <!-- Manual save area -->
+    <section id="manual-save-area" style="display:none; margin-top:12px; padding:14px; border:1px solid var(--line); border-radius:14px; background:rgba(18,20,29,0.7);">
+      <label style="font-size:12px; font-weight:600; color:var(--muted);">✏️ Paste or type the correct lyrics:</label>
+      <textarea id="manual-lyrics-input" rows="4" style="width:100%; margin:8px 0; padding:10px; border-radius:10px; background:#14161f; color:var(--text); border:1px solid var(--line); font-family:inherit; resize:vertical;"></textarea>
+      <div style="display:flex; align-items:center; gap:8px; margin:8px 0;">
+        <input type="checkbox" id="instrumental-check" style="width:16px; height:16px; accent-color:var(--accent);">
+        <label for="instrumental-check" style="font-size:12px; color:var(--muted);">Instrumental (no vocals)</label>
+      </div>
+      <div id="manual-controls" style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button id="save-manual-btn" class="primary-action" type="button">💾 Save Lyrics</button>
+        <button id="delete-manual-btn" class="secondary-action" type="button" style="color:#ff6b6b;">🗑 Delete</button>
+      </div>
+      <p style="margin:10px 0 0 0; font-size:12px; color:var(--muted); line-height:1.5;">
+        🔍 <strong>No lyrics found?</strong> Click <strong>"Search web"</strong> to find them online, then paste the correct lyrics here and click <strong>"Save Lyrics"</strong>. Your contribution can help others!
+      </p>
+    </section>
+
+    <!-- Submit area -->
+    <section id="submit-area" style="display:none; margin-top:12px; padding:10px; border:1px solid var(--line); border-radius:14px; background:rgba(18,20,29,0.7);">
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button id="submit-lrclib-btn" class="secondary-action" type="button" style="background:#6b46c1; border-color:#6b46c1; color:white; flex:1;">
+          🌍 Submit to LRCLIB Community
+        </button>
+        <button id="check-lrclib-btn" class="secondary-action" type="button" style="display:none; flex:1;">
+          🔄 Check LRCLIB
+        </button>
+      </div>
+      <span id="submit-status" style="font-size:12px; color:var(--muted); display:block; margin-top:6px;"></span>
+      <p id="submit-tip" style="margin:7px 0 0 0; font-size:11px; color:var(--muted); line-height:1.4;">
+        🌐 Indexing can take seconds to a couple minutes. Tap <strong>"Check LRCLIB"</strong> to see if it's live.
+      </p>
+    </section>
+  </main>
+  <script src="dist/sidepanel.js"></script>
+</body>
+</html>

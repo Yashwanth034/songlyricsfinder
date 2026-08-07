@@ -1,0 +1,13 @@
+{
+  "name": "instant-lyrics-extension",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "esbuild sidepanel.js --bundle --outfile=dist/sidepanel.js"
+  },
+  "dependencies": {
+    "@lrclib.js/challenge-solver": "^1.0.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0"
+  }
+}
