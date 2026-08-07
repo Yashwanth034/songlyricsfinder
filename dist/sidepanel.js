@@ -905,7 +905,7 @@
       lines[i].classList.toggle("active", i === index);
       lines[i].classList.toggle("past", i < index);
     }
-    if (index >= 0 && autoScrollEnabled && !userScrolling && Date.now() - autoScrollStartTime >= AUTO_SCROLL_DELAY) {
+    if (index >= 0 && autoScrollEnabled && !userScrolling) {
       lines[index]?.scrollIntoView({ behavior: "smooth", block: "center" });
     }
   }
@@ -986,11 +986,8 @@
     }
   }
   var autoScrollPollTimer = null;
-  var AUTO_SCROLL_DELAY = 1e4;
-  var autoScrollStartTime = Date.now();
   function startAutoScrollPolling() {
     stopAutoScrollPolling();
-    autoScrollStartTime = Date.now();
     autoScrollPollTimer = setInterval(async () => {
       if (!autoScrollEnabled || !currentTabId) return;
       const state = await queryVideoState(currentTabId) || await queryVideoStateViaMessage(currentTabId);
@@ -1011,15 +1008,11 @@
     if (!autoScrollEnabled || userScrolling) return;
     if (syncedLines?.length) return;
     if (!duration || !isFinite(duration) || duration <= 0) return;
-    const elapsed = Date.now() - autoScrollStartTime;
-    if (elapsed < AUTO_SCROLL_DELAY) return;
     const wrapper = document.getElementById("lyrics-wrapper");
     if (!wrapper || !wrapper.textContent.trim()) return;
     const maxScroll = wrapper.scrollHeight - wrapper.clientHeight;
     if (maxScroll <= 0) return;
-    const delaySeconds = AUTO_SCROLL_DELAY / 1e3;
-    const remaining = Math.max(duration - delaySeconds, 1);
-    const fraction = Math.min(Math.max((currentTime - delaySeconds) / remaining, 0), 1);
+    const fraction = Math.min(Math.max(currentTime / duration, 0), 1);
     const target = fraction * maxScroll;
     wrapper.scrollTo({ top: target, behavior: "smooth" });
   }
@@ -1218,7 +1211,6 @@
       return;
     }
     activeVideoKey = videoKey;
-    autoScrollStartTime = Date.now();
     if (manualLock && currentVideoId !== videoId) {
       manualLock = false;
     }

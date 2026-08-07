@@ -869,7 +869,7 @@ function updateActiveLine(currentTime) {
     lines[i].classList.toggle('active', i === index);
     lines[i].classList.toggle('past', i < index);
   }
-  if (index >= 0 && autoScrollEnabled && !userScrolling && Date.now() - autoScrollStartTime >= AUTO_SCROLL_DELAY) {
+  if (index >= 0 && autoScrollEnabled && !userScrolling) {
     lines[index]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 }
@@ -990,12 +990,9 @@ async function queryVideoStateViaMessage(tabId) {
 // actual length instead of a fixed speed that would run too fast for slow
 // songs or too slow for short ones. Polls the video tab once a second.
 let autoScrollPollTimer = null;
-const AUTO_SCROLL_DELAY = 10000; // 10 seconds before auto-scroll kicks in
-let autoScrollStartTime = Date.now();
 
 function startAutoScrollPolling() {
   stopAutoScrollPolling();
-  autoScrollStartTime = Date.now();
   autoScrollPollTimer = setInterval(async () => {
     if (!autoScrollEnabled || !currentTabId) return;
     const state = (await queryVideoState(currentTabId)) || (await queryVideoStateViaMessage(currentTabId));
@@ -1018,16 +1015,11 @@ function handleAutoScroll(currentTime, duration) {
   if (!autoScrollEnabled || userScrolling) return;
   if (syncedLines?.length) return; // synced mode scrolls the active line instead
   if (!duration || !isFinite(duration) || duration <= 0) return;
-  // Wait out the 10s delay first, then continue with the remaining time.
-  const elapsed = Date.now() - autoScrollStartTime;
-  if (elapsed < AUTO_SCROLL_DELAY) return;
   const wrapper = document.getElementById('lyrics-wrapper');
   if (!wrapper || !wrapper.textContent.trim()) return;
   const maxScroll = wrapper.scrollHeight - wrapper.clientHeight;
   if (maxScroll <= 0) return;
-  const delaySeconds = AUTO_SCROLL_DELAY / 1000;
-  const remaining = Math.max(duration - delaySeconds, 1);
-  const fraction = Math.min(Math.max((currentTime - delaySeconds) / remaining, 0), 1);
+  const fraction = Math.min(Math.max(currentTime / duration, 0), 1);
   const target = fraction * maxScroll;
   wrapper.scrollTo({ top: target, behavior: 'smooth' });
 }
@@ -1273,7 +1265,6 @@ async function detectAndDisplayLyrics() {
     return;
   }
   activeVideoKey = videoKey;
-  autoScrollStartTime = Date.now(); // restart the 10s delay for the new song
 
   if (manualLock && currentVideoId !== videoId) {
     manualLock = false;
