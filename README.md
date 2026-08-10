@@ -99,6 +99,21 @@ After rebuilding, reload the extension from `chrome://extensions`.
 - Automatic song detection is heuristic and can occasionally classify a non-music video as a song.
 - Website layout changes can affect title detection or lyrics extraction.
 
+## Acknowledgements
+
+This extension is made possible by the data, search capabilities, and public web services provided by:
+
+- [LRCLIB](https://lrclib.net/) — primary source for plain and synchronized lyrics, and the destination for user-approved community submissions
+- [Lyrics.ovh](https://lyrics.ovh/) — lyrics search fallback
+- [Genius](https://genius.com/), [AZLyrics](https://www.azlyrics.com/), and [Letras](https://www.letras.com/) — additional lyrics discovery sources
+- [YouTube](https://www.youtube.com/) — video playback and song-title detection
+- [Spotify](https://www.spotify.com/), [Deezer](https://www.deezer.com/), [Apple iTunes Search](https://performance-partners.apple.com/search-api), [JioSaavn](https://www.jiosaavn.com/), and [YouTube Music](https://music.youtube.com/) — song metadata, matching, and external search options
+- [Google](https://www.google.com/), [Bing](https://www.bing.com/), and [DuckDuckGo](https://duckduckgo.com/) — web-search fallbacks
+- [cors.lol](https://cors.lol/), [AllOrigins](https://allorigins.win/), and [corsproxy.io](https://corsproxy.io/) — cross-origin request fallbacks
+- [esbuild](https://esbuild.github.io/) and [LRCLIB challenge solver](https://www.npmjs.com/package/@lrclib.js/challenge-solver) — development and LRCLIB submission tooling
+
+All names and trademarks belong to their respective owners. These acknowledgements do not imply sponsorship, endorsement, or affiliation.
+
 ## Contributing
 
 Issues and pull requests are welcome. Keep changes focused, rebuild `dist/sidepanel.js` when changing `sidepanel.js`, and avoid committing credentials, local environment files, or generated dependency folders.
