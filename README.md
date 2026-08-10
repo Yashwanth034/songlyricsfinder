@@ -4,6 +4,10 @@ Instant Sidebar Lyrics is an unpacked Chrome extension that finds lyrics for the
 
 > This is an independent project and is not affiliated with YouTube, Google, Spotify, Genius, LRCLIB, or any other lyrics provider.
 
+## Preview
+
+![Instant Sidebar Lyrics showing synchronized lyrics in Chrome's side panel](docs/images/instant-sidebar-lyrics.png)
+
 ## Features
 
 - Detects the title of the current YouTube video and follows a song playing in a background tab.
